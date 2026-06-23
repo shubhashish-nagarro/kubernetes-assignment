@@ -1,0 +1,116 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mysql-secret
+type: Opaque
+data:
+  DB_PASSWORD: cm9vdA== # Base64 encoded value of "root"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+data:
+  DB_HOST: "mysql-service"
+  DB_PORT: "3306"
+  DB_NAME: "user_db"
+  DB_USER: "root"
+  PORT: "3000"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysql-configmap
+data:
+  init.sql: |
+    CREATE DATABASE IF NOT EXISTS user_db;
+    USE user_db;
+
+    CREATE TABLE IF NOT EXISTS users (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(100) NOT NULL,
+      email VARCHAR(150) UNIQUE NOT NULL
+    );
+
+    INSERT INTO users (name, email) VALUES
+      ('Shubhashish Das', 'shubhashish@example.com'),
+      ('Arun Bisht', 'arun@example.com'),
+      ('Abhishek Joshi', 'abhishek@example.com'),
+      ('Samyak Jain', 'samyak@example.com'),
+      ('Rashmi Sinha', 'rashmi@example.com'),
+      ('Deepak Sharma', 'deepa@example.com'),
+      ('Rahul Verma', 'rahul@example.com'),
+      ('Priya Sharma', 'priya@example.com'),
+      ('Amit Patel', 'amit@example.com'),
+      ('Sneha Reddy', 'sneha@example.com'),
+      ('Vikram Malhotra', 'vikram@example.com'),
+      ('Ananya Iyer', 'ananya@example.com'),
+      ('Rohan Gupta', 'rohan@example.com'),
+      ('Neha Kapoor', 'neha@example.com'),
+      ('Manish Choudhary', 'manish@example.com'),
+      ('Kriti Saxena', 'kriti@example.com');
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql
+spec:
+  serviceName: "mysql-service"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:8.0
+          ports:
+            - containerPort: 3306
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secret
+                  key: DB_PASSWORD
+            - name: MYSQL_DATABASE
+              value: "user_db"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          volumeMounts:
+            - name: mysql-data
+              mountPath: /var/lib/mysql
+            - name: mysql-init
+              mountPath: /docker-entrypoint-initdb.d
+      volumes:
+        - name: mysql-init
+          configMap:
+            name: mysql-configmap
+  volumeClaimTemplates:
+    - metadata:
+        name: mysql-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-service
+spec:
+  type: ClusterIP
+  selector:
+    app: mysql
+  ports:
+    - port: 3306
+      targetPort: 3306
